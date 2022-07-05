@@ -161,6 +161,10 @@ function Orienter.client_onCreate(self)
 	self.network:sendToServer("sv_sendModeToClient")
 end
 
+function Orienter.client_onDestroy(self)
+	self:client_onGuiDestroyCallback()
+end
+
 function Orienter.sv_sendModeToClient(self)
 	local _UvIndex = self.modetable[self.mode].savevalue - 1
 	self.network:sendToClients("cl_setMode", { uvIndex = _UvIndex, mode = self.mode })
@@ -182,9 +186,24 @@ local _UnitTable = {
 	'UnitsTotebot', 'UnitsWoc', 'UnitsGlowworm'
 }
 
+function Orienter.client_onGuiDestroyCallback(self)
+	local s_gui = self.gui
+	if s_gui and sm.exists(s_gui) then
+		if s_gui:isActive() then
+			s_gui:close()
+		end
+
+		s_gui:destroy()
+	end
+
+	self.gui = nil
+end
+
 function Orienter.client_onInteract(self, character, lookAt)
     if lookAt == true then
-        self.gui = sm.gui.createGuiFromLayout('$MOD_DATA/Gui/Layouts/Orienter.layout')
+        self.gui = mp_gui_createGuiFromLayout("$MOD_DATA/Gui/Layouts/Orienter.layout", false, { backgroundAlpha = 0.5 })
+		self.gui:setOnCloseCallback("client_onGuiDestroyCallback")
+
         for _, buttonName in pairs(targetTable) do
             self.gui:setButtonCallback(buttonName, "cl_onTargetButtonClick")
         end
@@ -367,8 +386,9 @@ function Orienter.sv_changeMode(self, params)
 end
 
 function Orienter.client_canInteract(self)
-	local _useKey = sm.gui.getKeyBinding("Use")
-	sm.gui.setInteractionText("Press", _useKey, " to change the mode")
+	local use_key = mp_gui_getKeyBinding("Use", true)
+	sm.gui.setInteractionText("Press", use_key, "to select an orient mode")
+
 	return true
 end
 
@@ -761,11 +781,6 @@ function predictmove(self, mypos, direction, targetpos, localcalc)--MINE --FINAL
 
 
 	self.pose1 = ((1/(4*distance)) and 1/(4*distance) or 1)
-end
-
-
-function getLocal(shape, vec)
-    return sm.vec3.new(sm.shape.getRight(shape):dot(vec), sm.shape.getAt(shape):dot(vec), sm.shape.getUp(shape):dot(vec))
 end
 
 
@@ -1334,14 +1349,15 @@ function Orienter.server_onFixedUpdate( self, dt )
 		if math.abs(self.power) >= 3.3*10^38 then
 			if self.power < 0 then self.power = -3.3*10^38 else self.power = 3.3*10^38 end
 		end
-		self.interactable:setPower(self.power) -- when in distance mode
-	else
 
+		mp_setPowerSafe(self, self.power) -- when in distance mode
+	else
 		if self.pitch ~= self.pitch then self.pitch = 0 end
 		if math.abs(self.pitch) >= 3.3*10^38 then
 			if self.pitch < 0 then self.pitch = -3.3*10^38 else self.pitch = 3.3*10^38 end
 		end
-		self.interactable:setPower(self.pitch/180)
+
+		mp_setPowerSafe(self, self.pitch / 180)
 	end
 
 	if self.yaw ~= self.lastpose0 then

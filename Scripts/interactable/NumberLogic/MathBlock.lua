@@ -861,16 +861,13 @@ end
 
 function MathBlock.sv_setValue(self, value)
 	self.power = value
+
 	if value ~= value then value = 0 end
 	if math.abs(value) >= 3.3*10^38 then
 		if value < 0 then value = -3.3*10^38 else value = 3.3*10^38 end
 	end
-	if value ~= self.interactable.power then
-		self.interactable:setActive(value ~= 0) --that makes new engines work
-		--self.interactable:setActive(value > 0) --old function
-		self.interactable:setPower(value)
-		sm.interactable.setValue(self.interactable, value)
-	end
+
+	mp_updateOutputData(self, value, value ~= 0)
 end
 
 function MathBlock.sv_senduvtoclient(self, msg)
@@ -882,12 +879,32 @@ function MathBlock.client_onCreate(self)
 	self.network:sendToServer("sv_senduvtoclient")
 end
 
+function MathBlock.client_onDestroy(self)
+	self:client_onGuiDestroyCallback()
+end
+
+function MathBlock.client_onGuiDestroyCallback(self)
+	local s_gui = self.gui
+	if s_gui and sm.exists(s_gui) then
+		if s_gui:isActive() then
+			s_gui:close()
+		end
+
+		s_gui:destroy()
+	end
+
+	self.gui = nil
+end
+
 function MathBlock.client_onInteract(self, character, lookAt)
     if lookAt == true then
-        self.gui = sm.gui.createGuiFromLayout('$MOD_DATA/Gui/Layouts/MathBlock.layout')
+		self.gui = mp_gui_createGuiFromLayout("$MOD_DATA/Gui/Layouts/MathBlock.layout", false, { backgroundAlpha = 0.5 })
+		self.gui:setOnCloseCallback("client_onGuiDestroyCallback")
+
 		for i = 0, 23 do
 			self.gui:setButtonCallback( "Operation" .. tostring( i ), "cl_onModeButtonClick" )
 		end
+		
 		for i = 1, 3 do
 			self.gui:setButtonCallback( "Page" .. tostring( i ), "cl_onPageButtonClick" )
 		end
@@ -975,8 +992,9 @@ function MathBlock.cl_setMode(self, data)
 end
 
 function MathBlock.client_canInteract(self)
-	local _useKey = sm.gui.getKeyBinding("Use")
-	sm.gui.setInteractionText("Press", _useKey, " to select a function")
+	local use_key = mp_gui_getKeyBinding("Use", true)
+	sm.gui.setInteractionText("Press", use_key, "to select a function")
+
 	return true
 end
 
